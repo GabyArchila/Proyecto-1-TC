@@ -42,8 +42,8 @@ def format_regex(regex):
             continue
 
         # Manejar épsilon
-        if c == 'ε':
-            formatted.append('ε')
+        if c == '#':
+            formatted.append('#')
             i += 1
             continue
 
@@ -83,7 +83,7 @@ def infix_to_postfix(regex):
             continue
 
         # Manejar épsilon
-        if c == 'ε':
+        if c == '#':
             output.append(c)
             i += 1
             continue

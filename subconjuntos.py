@@ -12,7 +12,7 @@ class Subconjuntos:
         alphabet = set()
         for estado in self.afn.transitions:
             for simbolo in self.afn.transitions[estado]:
-                if simbolo != 'ε':
+                if simbolo != '#':
                     alphabet.add(simbolo)
         self.afd.alphabet = alphabet
 

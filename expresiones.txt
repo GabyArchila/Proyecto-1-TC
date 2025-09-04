@@ -1,0 +1,4 @@
+# Archivo de expresiones regulares para testing
+# Formato: expresión_regular,cadena_a_evaluar
+
+(b|b)*abb(a|b)*,babbaaaa

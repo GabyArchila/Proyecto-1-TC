@@ -17,7 +17,7 @@ class Thompson:
         inicio = afn.crear_estado()
         fin = afn.crear_estado(is_final=True)
         afn.start_state = inicio
-        afn.agregar_transicion(inicio, fin, 'ε')
+        afn.agregar_transicion(inicio, fin, '#')
         return afn
 
     def concatenacion(self, afn1, afn2):
@@ -48,7 +48,7 @@ class Thompson:
 
         # Conectar estados finales de afn1 con estado inicial de afn2
         for estado_final in afn1.final_states:
-            nuevo_afn.agregar_transicion(estado_map[estado_final], estado_map[afn2.start_state], 'ε')
+            nuevo_afn.agregar_transicion(estado_map[estado_final], estado_map[afn2.start_state], '#')
 
         nuevo_afn.start_state = estado_map[afn1.start_state]
         nuevo_afn.final_states = {estado_map[e] for e in afn2.final_states}
@@ -83,14 +83,14 @@ class Thompson:
                     nuevo_afn.agregar_transicion(estado_map2[origen], estado_map2[destino], simbolo)
 
         # Conectar nuevo inicio a los inicios de afn1 y afn2
-        nuevo_afn.agregar_transicion(nuevo_inicio, estado_map1[afn1.start_state], 'ε')
-        nuevo_afn.agregar_transicion(nuevo_inicio, estado_map2[afn2.start_state], 'ε')
+        nuevo_afn.agregar_transicion(nuevo_inicio, estado_map1[afn1.start_state], '#')
+        nuevo_afn.agregar_transicion(nuevo_inicio, estado_map2[afn2.start_state], '#')
 
         # Conectar estados finales de afn1 y afn2 al nuevo fin
         for estado in afn1.final_states:
-            nuevo_afn.agregar_transicion(estado_map1[estado], nuevo_fin, 'ε')
+            nuevo_afn.agregar_transicion(estado_map1[estado], nuevo_fin, '#')
         for estado in afn2.final_states:
-            nuevo_afn.agregar_transicion(estado_map2[estado], nuevo_fin, 'ε')
+            nuevo_afn.agregar_transicion(estado_map2[estado], nuevo_fin, '#')
 
         nuevo_afn.start_state = nuevo_inicio
         nuevo_afn.final_states = {nuevo_fin}
@@ -99,29 +99,31 @@ class Thompson:
 
     def estrella(self, afn):
         nuevo_afn = AFN()
-        nuevo_inicio = nuevo_afn.crear_estado(is_final=True)
+        nuevo_inicio = nuevo_afn.crear_estado(is_final=True)  # Estado inicial también es final
 
+        # Mapear estados del AFN original
         estado_map = {}
         for estado in afn.states:
-            nuevo_estado = nuevo_afn.crear_estado(is_final=False)
+            nuevo_estado = nuevo_afn.crear_estado(is_final=estado.is_final)
             estado_map[estado] = nuevo_estado
 
-        # Copiar transiciones
+        # Copiar TODAS las transiciones del AFN original (incluyendo las de 'a')
         for origen in afn.transitions:
             for simbolo in afn.transitions[origen]:
                 for destino in afn.transitions[origen][simbolo]:
                     nuevo_afn.agregar_transicion(estado_map[origen], estado_map[destino], simbolo)
 
-        # Conectar nuevo inicio al inicio del afn original
-        nuevo_afn.agregar_transicion(nuevo_inicio, estado_map[afn.start_state], 'ε')
+        # Conectar nuevo inicio al inicio del AFN original
+        nuevo_afn.agregar_transicion(nuevo_inicio, estado_map[afn.start_state], '#')
 
-        # Conectar estados finales al inicio del afn original y al nuevo inicio
+        # Conectar estados finales al inicio del AFN original
         for estado_final in afn.final_states:
-            nuevo_afn.agregar_transicion(estado_map[estado_final], estado_map[afn.start_state], 'ε')
-            nuevo_afn.agregar_transicion(estado_map[estado_final], nuevo_inicio, 'ε')
+            nuevo_afn.agregar_transicion(estado_map[estado_final], estado_map[afn.start_state], '#')
+            # También conectar al nuevo inicio (para aceptar ε)
+            nuevo_afn.agregar_transicion(estado_map[estado_final], nuevo_inicio, '#')
 
         nuevo_afn.start_state = nuevo_inicio
-        nuevo_afn.final_states = {nuevo_inicio}
+        nuevo_afn.final_states = {nuevo_inicio}  # El nuevo inicio es final
 
         return nuevo_afn
 
@@ -169,7 +171,7 @@ class Thompson:
                     afn = stack.pop()
                     epsilon = self.crear_epsilon()
                     stack.append(self.union(epsilon, afn))
-                elif char == 'ε':
+                elif char == '#':
                     # Épsilon
                     stack.append(self.crear_epsilon())
                 else:
@@ -182,3 +184,4 @@ class Thompson:
             raise ValueError(f"Expresión postfix inválida: stack final tiene {len(stack)} elementos (debería ser 1)")
 
         return stack.pop()
+
