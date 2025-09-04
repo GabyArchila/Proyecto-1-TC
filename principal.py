@@ -15,8 +15,8 @@ def debug_construccion_paso_a_paso(postfix):
     stack = []
 
     for i, char in enumerate(postfix):
-        print(f"\n  Paso {i}: Carácter '{char}'")
-        print(f"     Stack antes: {[str(afn.start_state) if hasattr(afn, 'start_state') else afn for afn in stack]}")
+        print(f"\n  Paso {i + 1}: Carácter '{char}'")
+        print(f"     Stack antes: {len(stack)} elementos")
 
         try:
             if char == '.':
@@ -26,7 +26,8 @@ def debug_construccion_paso_a_paso(postfix):
                 afn1 = stack.pop()
                 result = thompson.concatenacion(afn1, afn2)
                 stack.append(result)
-                print(f"     Concatenación: {afn1.start_state} + {afn2.start_state} -> {result.start_state}")
+                print(
+                    f"     Concatenación: AFN1({len(afn1.states)} estados) + AFN2({len(afn2.states)} estados) -> AFN({len(result.states)} estados)")
 
             elif char == '|':
                 if len(stack) < 2:
@@ -35,7 +36,8 @@ def debug_construccion_paso_a_paso(postfix):
                 afn1 = stack.pop()
                 result = thompson.union(afn1, afn2)
                 stack.append(result)
-                print(f"     Unión: {afn1.start_state} | {afn2.start_state} -> {result.start_state}")
+                print(
+                    f"     Unión: AFN1({len(afn1.states)} estados) | AFN2({len(afn2.states)} estados) -> AFN({len(result.states)} estados)")
 
             elif char == '*':
                 if len(stack) < 1:
@@ -43,43 +45,44 @@ def debug_construccion_paso_a_paso(postfix):
                 afn = stack.pop()
                 result = thompson.estrella(afn)
                 stack.append(result)
-                print(f"     Kleene: {afn.start_state}* -> {result.start_state}")
+                print(f"     Kleene: AFN({len(afn.states)} estados)* -> AFN({len(result.states)} estados)")
 
             elif char == '+':
                 if len(stack) < 1:
                     raise ValueError(f"Plus requiere 1 operando")
                 afn = stack.pop()
-                kleene = thompson.estrella(afn)
-                result = thompson.concatenacion(afn, kleene)
+                result = thompson.plus(afn)
                 stack.append(result)
-                print(f"     Plus: {afn.start_state}+ -> {result.start_state}")
+                print(f"     Plus: AFN({len(afn.states)} estados)+ -> AFN({len(result.states)} estados)")
 
             elif char == '?':
                 if len(stack) < 1:
                     raise ValueError(f"Interrogación requiere 1 operando")
                 afn = stack.pop()
-                epsilon = thompson.crear_epsilon()
-                result = thompson.union(epsilon, afn)
+                result = thompson.opcional(afn)
                 stack.append(result)
-                print(f"     Opcional: {afn.start_state}? -> {result.start_state}")
+                print(f"     Opcional: AFN({len(afn.states)} estados)? -> AFN({len(result.states)} estados)")
 
             elif char == '#':
                 result = thompson.crear_epsilon()
                 stack.append(result)
-                print(f"     Épsilon: -> {result.start_state}")
+                print(f"     Épsilon: -> AFN({len(result.states)} estados)")
 
             else:
                 result = thompson.crear_simbolo(char)
                 stack.append(result)
-                print(f"     Símbolo '{char}': -> {result.start_state}")
+                print(f"     Símbolo '{char}': -> AFN({len(result.states)} estados)")
 
-            print(f"     Stack después: {[str(afn.start_state) for afn in stack]}")
+            print(f"     Stack después: {len(stack)} elementos")
 
         except Exception as e:
-            print(f"     Error en paso {i}: {e}")
+            print(f"     Error en paso {i + 1}: {e}")
             raise
 
-    return stack[0] if stack else None
+    if len(stack) != 1:
+        raise ValueError(f"Stack final tiene {len(stack)} elementos, debería tener 1")
+
+    return stack[0]
 
 
 def procesar_expresion(regex, cadena):
@@ -109,8 +112,8 @@ def procesar_expresion(regex, cadena):
         # Paso 2: Construir AFN con Thompson
         print("\n2. CONSTRUCCIÓN DE AFN (THOMPSON)")
 
-        # Depuración paso a paso para expresiones complejas
-        if len(postfix) > 3:  # Solo para expresiones complejas
+        # Construcción paso a paso para depuración
+        if len(postfix) > 2:
             afn = debug_construccion_paso_a_paso(postfix)
         else:
             thompson = Thompson()
@@ -120,28 +123,12 @@ def procesar_expresion(regex, cadena):
             print("Error: No se pudo construir el AFN")
             return False
 
-        print("AFN construido exitosamente")
+        print(f"\nAFN construido exitosamente:")
+        print(f"  - Estados: {len(afn.states)}")
+        print(f"  - Estado inicial: {afn.start_state}")
+        print(f"  - Estados finales: {len(afn.final_states)}")
 
-        # DEBUG: Mostrar información DETALLADA del AFN (AGREGA ESTO)
-        print("\nDEBUG DETALLADO - TRANSICIONES DEL AFN:")
-        print("=" * 50)
-        for origen in afn.transitions:
-            for simbolo in afn.transitions[origen]:
-                destinos = afn.transitions[origen][simbolo]
-                print(f"   {origen} --{simbolo}--> {[str(d) for d in destinos]}")
-        print("=" * 50)
-
-        # DEBUG: Verificar transiciones de símbolos (no solo épsilon)
-        simbolos_presentes = set()
-        for origen in afn.transitions:
-            for simbolo in afn.transitions[origen]:
-                if simbolo != '#':
-                    simbolos_presentes.add(simbolo)
-
-        print(f"Símbolos no-épsilon encontrados: {simbolos_presentes}")
-        print()
-
-        # DEBUG: Mostrar información del AFN
+        # Mostrar información detallada del AFN
         afn.debug_info()
 
         # Visualizar AFN
@@ -156,7 +143,15 @@ def procesar_expresion(regex, cadena):
         print("\n3. CONVERSIÓN AFN A AFD (SUBCONJUNTOS)")
         subconjuntos = Subconjuntos(afn)
         afd = subconjuntos.convertir()
-        print("FD construido exitosamente")
+
+        print(f"AFD construido exitosamente:")
+        print(f"  - Estados: {len(afd.states)}")
+        print(f"  - Estado inicial: {afd.start_state}")
+        print(f"  - Estados finales: {len(afd.final_states)}")
+        print(f"  - Alfabeto: {afd.alphabet}")
+
+        # Mostrar información detallada del AFD
+        afd.debug_info()
 
         # Visualizar AFD
         print("Visualizando AFD...")
@@ -170,7 +165,14 @@ def procesar_expresion(regex, cadena):
         print("\n4. MINIMIZACIÓN DE AFD")
         minimizador = MinimizacionAFD(afd)
         afd_min = minimizador.minimizar()
-        print("AFD minimizado construido exitosamente")
+
+        print(f"AFD minimizado construido exitosamente:")
+        print(f"  - Estados: {len(afd_min.states)}")
+        print(f"  - Estado inicial: {afd_min.start_state}")
+        print(f"  - Estados finales: {len(afd_min.final_states)}")
+
+        # Mostrar información detallada del AFD minimizado
+        afd_min.debug_info()
 
         # Visualizar AFD minimizado
         print("Visualizando AFD minimizado...")
@@ -266,6 +268,9 @@ def procesar_archivo(nombre_archivo):
 
 
 def main():
+    print("Analizador Léxico - Construcción de Autómatas")
+    print("=" * 60)
+
     if len(sys.argv) == 3:
         # Modo línea de comandos: python principal.py "expresion" "cadena"
         regex = sys.argv[1]
@@ -279,8 +284,6 @@ def main():
 
     else:
         # Modo interactivo simple
-        print("Analizador Léxico")
-        print("=" * 50)
         print("Modos de uso:")
         print("  python principal.py 'expresion' 'cadena'")
         print("  python principal.py archivo.txt")

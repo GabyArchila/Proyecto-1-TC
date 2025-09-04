@@ -1,12 +1,14 @@
 from collections import deque
 from automata import AFD
 
+
 class Subconjuntos:
     def __init__(self, afn):
         self.afn = afn
         self.afd = AFD()
         self.estados_afd = {}  # Mapeo de conjuntos de estados AFN a estados AFD
 
+    # Mejorar el método convertir
     def convertir(self):
         # Obtener el alfabeto (excluyendo épsilon)
         alphabet = set()
@@ -14,6 +16,7 @@ class Subconjuntos:
             for simbolo in self.afn.transitions[estado]:
                 if simbolo != '#':
                     alphabet.add(simbolo)
+
         self.afd.alphabet = alphabet
 
         # Estado inicial del AFD es la ε-clausura del estado inicial del AFN
@@ -28,18 +31,20 @@ class Subconjuntos:
             conjunto_actual = por_procesar.popleft()
             estado_actual = self.obtener_estado_afd(conjunto_actual)
 
-            # Si ya procesamos este conjunto, saltar
-            if tuple(sorted(e.id for e in conjunto_actual)) in procesados:
+            # Crear clave única para el conjunto
+            clave_conjunto = frozenset(conjunto_actual)
+
+            if clave_conjunto in procesados:
                 continue
 
-            procesados.add(tuple(sorted(e.id for e in conjunto_actual)))
+            procesados.add(clave_conjunto)
 
             # Marcar como final si contiene algún estado final del AFN
             if any(estado.is_final for estado in conjunto_actual):
                 self.afd.final_states.add(estado_actual)
 
             # Para cada símbolo en el alfabeto
-            for simbolo in alphabet:
+            for simbolo in sorted(alphabet):
                 siguiente_conjunto = self.afn.mover(conjunto_actual, simbolo)
 
                 if siguiente_conjunto:
@@ -47,7 +52,7 @@ class Subconjuntos:
                     self.afd.transitions[(estado_actual, simbolo)] = siguiente_estado
 
                     # Agregar a la cola si no ha sido procesado
-                    siguiente_clave = tuple(sorted(e.id for e in siguiente_conjunto))
+                    siguiente_clave = frozenset(siguiente_conjunto)
                     if siguiente_clave not in procesados:
                         por_procesar.append(siguiente_conjunto)
 

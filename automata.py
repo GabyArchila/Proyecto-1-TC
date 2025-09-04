@@ -44,10 +44,12 @@ class AFN:
 
         while stack:
             estado = stack.pop()
-            for next_state in self.transitions[estado].get('#', set()):
-                if next_state not in closure:
-                    closure.add(next_state)
-                    stack.append(next_state)
+            # Solo procesar transiciones epsilon
+            if '#' in self.transitions[estado]:
+                for next_state in self.transitions[estado]['#']:
+                    if next_state not in closure:
+                        closure.add(next_state)
+                        stack.append(next_state)
         return closure
 
     def mover(self, estados, simbolo):
@@ -61,15 +63,10 @@ class AFN:
         current_states = self.epsilon_closure({self.start_state})
 
         for simbolo in cadena:
-            next_states = set()
-            for estado in current_states:
-                if simbolo in self.transitions[estado]:
-                    next_states.update(self.transitions[estado][simbolo])
-
+            next_states = self.mover(current_states, simbolo)
             if not next_states:
                 return False
-
-            current_states = self.epsilon_closure(next_states)
+            current_states = next_states
 
         return any(estado.is_final for estado in current_states)
 
@@ -78,11 +75,29 @@ class AFN:
         print(f"   Estado inicial: {self.start_state}")
         print(f"   Estados finales: {[str(e) for e in self.final_states]}")
         print(f"   Total de estados: {len(self.states)}")
-        print(f"   Transiciones:")
+
+        # Verificar consistencia
+        estados_en_transiciones = set()
         for origen in self.transitions:
+            estados_en_transiciones.add(origen)
             for simbolo in self.transitions[origen]:
-                destinos = self.transitions[origen][simbolo]
-                print(f"      {origen} --{simbolo}--> {[str(d) for d in destinos]}")
+                for destino in self.transitions[origen][simbolo]:
+                    estados_en_transiciones.add(destino)
+
+        estados_desconectados = self.states - estados_en_transiciones
+        if estados_desconectados:
+            print(f"   ⚠️  Estados desconectados: {[str(e) for e in estados_desconectados]}")
+
+        print(f"   Transiciones ({len(self.transitions)} estados con transiciones):")
+        if not self.transitions:
+            print("      ⚠️  No hay transiciones definidas")
+        else:
+            for origen in sorted(self.transitions.keys(), key=lambda x: x.id):
+                for simbolo in sorted(self.transitions[origen].keys()):
+                    destinos = self.transitions[origen][simbolo]
+                    for destino in sorted(destinos, key=lambda x: x.id):
+                        display_symbol = 'ε' if simbolo == '#' else simbolo
+                        print(f"      {origen} --{display_symbol}--> {destino}")
         print()
 
     def visualizar(self, titulo="AFN"):
@@ -92,86 +107,104 @@ class AFN:
         for estado in self.states:
             G.add_node(str(estado))
 
+        # Agregar aristas y crear etiquetas
         edge_labels = {}
-        # Procesar transiciones usando la misma lógica que el AFD
         for origen in self.transitions:
             for simbolo in self.transitions[origen]:
                 for destino in self.transitions[origen][simbolo]:
-                    key = (str(origen), str(destino))
-                    # Reemplazar épsilon para mejor visualización
-                    display_symbol = '#' if simbolo == '#' else simbolo
-                    if key in edge_labels:
-                        edge_labels[key] += f",{display_symbol}"
+                    edge = (str(origen), str(destino))
+                    display_symbol = 'ε' if simbolo == '#' else simbolo
+
+                    if edge in edge_labels:
+                        edge_labels[edge] += f",{display_symbol}"
                     else:
-                        edge_labels[key] = display_symbol
+                        edge_labels[edge] = display_symbol
+
                     G.add_edge(str(origen), str(destino))
 
-        plt.figure(figsize=(14, 10))  # Aumentar tamaño
+        # Configurar la figura
+        plt.figure(figsize=(12, 8))
 
-        # Usar un layout más estable y espaciado
-        pos = nx.spring_layout(G, k=3, iterations=50, seed=42)
+        # Crear layout mejorado
+        if len(self.states) <= 5:
+            pos = nx.spring_layout(G, k=2, iterations=100, seed=42)
+        else:
+            pos = nx.spring_layout(G, k=1.5, iterations=50, seed=42)
 
-        # Ajustar posiciones manualmente si es necesario para mejorar visualización
-        # Esto ayuda especialmente con grafos pequeños como a*
-        if len(self.states) <= 4:
-            # Para grafos pequeños, usar posiciones más controladas
-            states_list = list(self.states)
-            if len(states_list) == 3:  # Caso específico de a*
-                pos[str(states_list[0])] = (0, 0)  # q0 (centro-izquierda)
-                pos[str(states_list[1])] = (-1, -1)  # q1 (abajo-izquierda)
-                pos[str(states_list[2])] = (1, 0)  # q2 (derecha)
+        # Clasificar nodos por tipo
+        initial_nodes = [str(self.start_state)] if self.start_state else []
+        final_nodes = [str(estado) for estado in self.final_states]
+        regular_nodes = [str(estado) for estado in self.states
+                         if estado not in self.final_states and estado != self.start_state]
 
-        # Convertir a string
-        initial = [str(self.start_state)] if self.start_state else []
-        final = [str(e) for e in self.final_states]
-        all_states = [str(e) for e in self.states]
-        regular = [e for e in all_states if e not in final and e not in initial]
+        # Nodos que son iniciales Y finales
+        initial_final_nodes = [str(estado) for estado in self.final_states
+                               if estado == self.start_state]
 
-        # Dibujar nodos con colores más distintivos
-        if initial:
-            nx.draw_networkx_nodes(G, pos, nodelist=initial, node_color='lightgreen',
-                                   node_size=1000, edgecolors='black', linewidths=2)
-        if final:
-            nx.draw_networkx_nodes(G, pos, nodelist=final, node_color='lightcoral',
-                                   node_size=1000, edgecolors='black', linewidths=2)
-        if regular:
-            nx.draw_networkx_nodes(G, pos, nodelist=regular, node_color='lightblue',
-                                   node_size=900, edgecolors='black', linewidths=1)
+        # Ajustar listas para evitar duplicados
+        if initial_final_nodes:
+            initial_nodes = [n for n in initial_nodes if n not in initial_final_nodes]
+            final_nodes = [n for n in final_nodes if n not in initial_final_nodes]
 
-        # Dibujar aristas con mejor estilo
-        nx.draw_networkx_edges(G, pos, arrowstyle='->', arrowsize=25,
+        # Dibujar nodos con diferentes estilos
+        if initial_nodes:
+            nx.draw_networkx_nodes(G, pos, nodelist=initial_nodes,
+                                   node_color='lightgreen', node_size=1000,
+                                   edgecolors='black', linewidths=2)
+
+        if final_nodes:
+            nx.draw_networkx_nodes(G, pos, nodelist=final_nodes,
+                                   node_color='lightcoral', node_size=1000,
+                                   edgecolors='black', linewidths=2)
+
+        if initial_final_nodes:
+            nx.draw_networkx_nodes(G, pos, nodelist=initial_final_nodes,
+                                   node_color='gold', node_size=1200,
+                                   edgecolors='black', linewidths=3)
+
+        if regular_nodes:
+            nx.draw_networkx_nodes(G, pos, nodelist=regular_nodes,
+                                   node_color='lightblue', node_size=900,
+                                   edgecolors='black', linewidths=1)
+
+        # Dibujar aristas
+        nx.draw_networkx_edges(G, pos, arrowstyle='->', arrowsize=20,
                                edge_color='black', width=1.5, alpha=0.8)
 
         # Dibujar etiquetas de nodos
         nx.draw_networkx_labels(G, pos, font_size=12, font_weight='bold')
 
-        # Dibujar etiquetas manualmente para evitar problemas de renderizado
-        for (node1, node2), label in edge_labels.items():
-            x1, y1 = pos[node1]
-            x2, y2 = pos[node2]
-            # Posición de la etiqueta en el punto medio de la arista
+        # Dibujar etiquetas de aristas mejoradas
+        for edge, label in edge_labels.items():
+            x1, y1 = pos[edge[0]]
+            x2, y2 = pos[edge[1]]
+
+            # Calcular posición de la etiqueta
             label_x = (x1 + x2) / 2
             label_y = (y1 + y2) / 2
 
-            # Desplazamiento para evitar superposición
-            offset_x = 0.15 if x2 > x1 else -0.15
-            offset_y = 0.15 if y2 > y1 else -0.15
+            # Offset para evitar superposición con la arista
+            dx = x2 - x1
+            dy = y2 - y1
+            length = (dx ** 2 + dy ** 2) ** 0.5
 
-            plt.annotate(label, xy=(label_x + offset_x, label_y + offset_y),
-                         ha='center', va='center',
-                         fontsize=12, fontweight='bold', color='darkred',
-                         bbox=dict(boxstyle='round,pad=0.3', facecolor='yellow',
-                                   edgecolor='darkred', alpha=0.9))
+            if length > 0:
+                # Perpendicular a la arista
+                offset_x = -dy / length * 0.1
+                offset_y = dx / length * 0.1
+            else:
+                offset_x, offset_y = 0.1, 0.1
 
-        plt.title(titulo, fontsize=14, fontweight='bold')
+            plt.text(label_x + offset_x, label_y + offset_y, label,
+                     fontsize=10, fontweight='bold', color='darkred',
+                     ha='center', va='center',
+                     bbox=dict(boxstyle='round,pad=0.2', facecolor='white',
+                               edgecolor='darkred', alpha=0.8))
+
+        plt.title(titulo, fontsize=14, fontweight='bold', pad=20)
         plt.axis('off')
         plt.tight_layout()
         plt.show()
-
-        # DEBUG para verificar
-        print(f"DEBUG - Aristas creadas: {list(G.edges())}")
-        print(f"DEBUG - Etiquetas: {edge_labels}")
-
 
 
 class AFD:
@@ -191,6 +224,17 @@ class AFD:
                 return False
         return current in self.final_states
 
+    def debug_info(self):
+        print(f"INFO DEL AFD:")
+        print(f"   Estado inicial: {self.start_state}")
+        print(f"   Estados finales: {list(self.final_states)}")
+        print(f"   Total de estados: {len(self.states)}")
+        print(f"   Alfabeto: {list(self.alphabet)}")
+        print(f"   Transiciones:")
+        for (origen, simbolo), destino in self.transitions.items():
+            print(f"      {origen} --{simbolo}--> {destino}")
+        print()
+
     def visualizar(self, titulo="AFD"):
         G = nx.DiGraph()
 
@@ -198,35 +242,89 @@ class AFD:
         for estado in self.states:
             G.add_node(str(estado))
 
+        # Procesar transiciones y crear etiquetas
         edge_labels = {}
         for (origen, simbolo), destino in self.transitions.items():
-            key = (str(origen), str(destino))  # Convertir a string
-            if key in edge_labels:
-                edge_labels[key] += f",{simbolo}"
+            edge = (str(origen), str(destino))
+
+            if edge in edge_labels:
+                edge_labels[edge] += f",{simbolo}"
             else:
-                edge_labels[key] = simbolo
+                edge_labels[edge] = simbolo
+
             G.add_edge(str(origen), str(destino))
 
+        # Configurar la figura
         plt.figure(figsize=(12, 8))
-        pos = nx.spring_layout(G, seed=42)
+        pos = nx.spring_layout(G, k=2, iterations=100, seed=42)
 
-        # Convertir a string
-        initial = [str(self.start_state)] if self.start_state else []
-        final = [str(e) for e in self.final_states]
-        all_states = [str(e) for e in self.states]
-        regular = [e for e in all_states if e not in final and e not in initial]
+        # Clasificar nodos
+        initial_nodes = [str(self.start_state)] if self.start_state else []
+        final_nodes = [str(estado) for estado in self.final_states]
+        regular_nodes = [str(estado) for estado in self.states
+                         if estado not in self.final_states and str(estado) not in initial_nodes]
 
-        if initial:
-            nx.draw_networkx_nodes(G, pos, nodelist=initial, node_color='green', node_size=800)
-        if final:
-            nx.draw_networkx_nodes(G, pos, nodelist=final, node_color='red', node_size=800)
-        if regular:
-            nx.draw_networkx_nodes(G, pos, nodelist=regular, node_color='lightblue', node_size=700)
+        # Nodos que son iniciales Y finales
+        initial_final_nodes = []
+        if self.start_state and str(self.start_state) in final_nodes:
+            initial_final_nodes = [str(self.start_state)]
+            initial_nodes = []
+            final_nodes = [n for n in final_nodes if n != str(self.start_state)]
 
-        nx.draw_networkx_edges(G, pos, arrowstyle='->', arrowsize=20)
-        nx.draw_networkx_labels(G, pos, font_size=10)
-        nx.draw_networkx_edge_labels(G, pos, edge_labels=edge_labels, font_size=8)
+        # Dibujar nodos
+        if initial_nodes:
+            nx.draw_networkx_nodes(G, pos, nodelist=initial_nodes,
+                                   node_color='lightgreen', node_size=1000,
+                                   edgecolors='black', linewidths=2)
 
-        plt.title(titulo)
+        if final_nodes:
+            nx.draw_networkx_nodes(G, pos, nodelist=final_nodes,
+                                   node_color='lightcoral', node_size=1000,
+                                   edgecolors='black', linewidths=2)
+
+        if initial_final_nodes:
+            nx.draw_networkx_nodes(G, pos, nodelist=initial_final_nodes,
+                                   node_color='gold', node_size=1200,
+                                   edgecolors='black', linewidths=3)
+
+        if regular_nodes:
+            nx.draw_networkx_nodes(G, pos, nodelist=regular_nodes,
+                                   node_color='lightblue', node_size=900,
+                                   edgecolors='black', linewidths=1)
+
+        # Dibujar aristas
+        nx.draw_networkx_edges(G, pos, arrowstyle='->', arrowsize=20,
+                               edge_color='black', width=1.5, alpha=0.8)
+
+        # Dibujar etiquetas de nodos
+        nx.draw_networkx_labels(G, pos, font_size=12, font_weight='bold')
+
+        # Dibujar etiquetas de aristas
+        for edge, label in edge_labels.items():
+            x1, y1 = pos[edge[0]]
+            x2, y2 = pos[edge[1]]
+
+            label_x = (x1 + x2) / 2
+            label_y = (y1 + y2) / 2
+
+            # Offset perpendicular
+            dx = x2 - x1
+            dy = y2 - y1
+            length = (dx ** 2 + dy ** 2) ** 0.5
+
+            if length > 0:
+                offset_x = -dy / length * 0.1
+                offset_y = dx / length * 0.1
+            else:
+                offset_x, offset_y = 0.1, 0.1
+
+            plt.text(label_x + offset_x, label_y + offset_y, label,
+                     fontsize=10, fontweight='bold', color='darkred',
+                     ha='center', va='center',
+                     bbox=dict(boxstyle='round,pad=0.2', facecolor='white',
+                               edgecolor='darkred', alpha=0.8))
+
+        plt.title(titulo, fontsize=14, fontweight='bold', pad=20)
         plt.axis('off')
+        plt.tight_layout()
         plt.show()
