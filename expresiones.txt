@@ -1,0 +1,9 @@
+# Archivo de expresiones regulares para testing
+# Formato: expresión_regular,cadena_a_evaluar
+
+\?(((\.|ε)?!?)\*)+,?..
+\?(((\.|ε)?!?)\*)+,?
+\?(((\.|ε)?!?)\*)+,?!.
+\?(((\.|ε)?!?)\*)+,!
+\?(((\.|ε)?!?)\*)+,!.!.!
+\?(((\.|ε)?!?)\*)+,!?.
